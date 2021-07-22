@@ -247,9 +247,35 @@ namespace SeerRaidBot {
       //save(); //NOTE(Rennorb): already done in register
     }
 
-    static string[] allowed_emotes = {
-      "😘"
-    };
+    static ulong[] allowed_emotes = {
+      757142853049909339, //:Necromancer:
+      757142853682987068, //:Reaper:
+      757142853502763130, //:Scourge:
+      757142853490180166, //:Thief:
+      757142853032869900, //:Daredevil:
+      757142853322276965, //:Deadeye:
+      757142853767135292, //:Mesmer:
+      757142852596924479, //:Chronomancer:
+      757142853431459910, //:Mirage:
+      757142853531992094, //:Engineer:
+      757142853607489546, //:Scrapper:
+      757142853515477112, //:Holosmith:
+      757142853393711184, //:Elementalist:
+      757142853431328839, //:Weaver:
+      757142853628723251, //:Tempest:
+      757142853213487247, //:Ranger:
+      757142853439979560, //:Druid:
+      757142853557420092, //:Soulbeast:
+      757142853431590982, //:Revenant:
+      757142853456494642, //:Renegade:
+      757142853309825105, //:Herald:
+      757142853175476265, //:Guardian:
+      757142852986732576, //:Dragonhunter:
+      757142853435523122, //:Firebrand:
+      757142853531992114, //:Warrior:
+      757142853012029490, //:Berserker:
+      757142853477728308, //:Spellbreaker:
+    }; 
 
     public static void register(IMessageChannel channel, RaidAppointment appointment)
     {
@@ -285,7 +311,7 @@ namespace SeerRaidBot {
       appointment.last_register_message = channel.GetMessageAsync(appointment.last_register_message.Id).Result; //urgh
       foreach (var (emote, metadata) in appointment.last_register_message.Reactions)
       {
-        if(allowed_emotes.Contains(emote.Name)) //todo  @speed
+        if(allowed_emotes.Contains(((Emote)emote).Id)) //todo  @speed
         {
           profession_list_builder.Clear();
           foreach (var user in appointment.last_register_message.GetReactionUsersAsync(emote, metadata.ReactionCount).FlattenAsync().Result)
