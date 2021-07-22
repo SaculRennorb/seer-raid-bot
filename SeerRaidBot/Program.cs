@@ -26,6 +26,8 @@ namespace SeerRaidBot {
     
     static Dictionary<IGuild, AppointmentContext> context_dict;
 
+    static Timer tick_timer;
+
     //https://discord.com/api/oauth2/authorize?client_id=866727722835116033&permissions=2048&scope=bot%20applications.commands
     static void Main(string[] args) {
       context_dict = new Dictionary<IGuild, AppointmentContext>();
@@ -50,11 +52,13 @@ namespace SeerRaidBot {
         while (Console.ReadLine() != "exit")
           Console.WriteLine("write 'exit' to exit.");
 
+        client.StopAsync().Wait();
         client.LogoutAsync().Wait();
       }
       else
       {
         Thread.Sleep(Timeout.Infinite);
+        //todo shutdown gracefully wth no console
       }
     }
     private static async Task joined_guild(SocketGuild guild)
@@ -138,6 +142,8 @@ namespace SeerRaidBot {
           Console.WriteLine(json);
         }
       }
+
+      tick_timer = new Timer(tick, null, TimeSpan.Zero, TimeSpan.FromMinutes(15));
     }
 
     private static async Task interaction_created(SocketInteraction interaction)
@@ -235,7 +241,7 @@ namespace SeerRaidBot {
       }
     }
 
-    static void tick()
+    static void tick(object? state)
     {
       foreach (var (guild, context) in context_dict)
       {
