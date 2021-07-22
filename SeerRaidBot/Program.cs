@@ -140,11 +140,16 @@ namespace SeerRaidBot {
       }
     }
 
-    private static async Task interaction_created(SocketInteraction arg)
+    private static async Task interaction_created(SocketInteraction interaction)
     {
-      var command = arg as SocketSlashCommand;
-      if(command == null) return;
+      if(!(interaction is SocketSlashCommand command)) return;
 
+      if(!((SocketGuildUser)interaction.User).Roles.Any(r => r.Permissions.Administrator || r.Name == "Bot-Father"))
+      {
+        interaction.RespondAsync("Not allowed, sory...", ephemeral: true).Wait();
+        return;
+      }
+      
       if(command.Data.Options.Count != 1)
       {
         command.RespondAsync($"unknown command '{command.Data.Name}'", ephemeral: true).Wait();
@@ -230,22 +235,6 @@ namespace SeerRaidBot {
       }
     }
 
-    private static async Task handle_message(SocketMessage message)
-    {
-      var user_message = message as SocketUserMessage;
-      if(message == null || message.Author.IsBot) return;
-
-      var user = message.Author as SocketGuildUser;
-      //foreach (var role in user.Roles)
-      //{
-      //  if(role.Name == "KULTIST" || role.Name == "Seeker")
-      //  {
-      //    goto good;
-      //  }
-      //}
-      //return;
-    }
-
     static void tick()
     {
       foreach (var (guild, context) in context_dict)
@@ -254,7 +243,7 @@ namespace SeerRaidBot {
         {
           foreach (var appointment in appointments)
           {
-            if(appointment.last_message_alert == null &&
+            if(appointment.last_message_alert == null && appointment.last_message_register != null &&
                appointment.next_occurence - DateTime.Now < ALERT_DELTA)
             {
               alert(channel, appointment);
@@ -399,7 +388,7 @@ namespace SeerRaidBot {
                 profession_list_builder.Append('\n');
               profession_list_builder.Append(user.Mention);
             }
-            builder.AddField(emote.ToString(), profession_list_builder);
+            builder.AddField(emote.ToString(), profession_list_builder, inline: true);
         }
         else
         {
