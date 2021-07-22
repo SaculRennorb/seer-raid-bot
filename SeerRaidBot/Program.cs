@@ -18,9 +18,9 @@ using AppointmentContext = System.Collections.Generic.Dictionary<Discord.IMessag
 namespace SeerRaidBot {
   class Program {
     static readonly TimeSpan REGISTER_DELTA = TimeSpan.FromHours(2);
-    static readonly TimeSpan    ALERT_DELTA = TimeSpan.FromHours(2);
-    static readonly string   SAVE_FILE = "data.save";
-    static readonly int   SAVE_VERSION = 0;
+    static readonly TimeSpan    ALERT_DELTA = TimeSpan.FromMinutes(15);
+    static readonly string SAVE_FILE = "data.save";
+    static readonly int    SAVE_VERSION = 1;
 
     static DiscordSocketClient client;
     
@@ -91,7 +91,21 @@ namespace SeerRaidBot {
           .AddOption(new SlashCommandOptionBuilder()
             .WithName("trigger")
             .WithType(ApplicationCommandOptionType.SubCommand)
-            .WithDescription("trigger a mmessage")
+            .WithDescription("trigger a message")
+            .AddOption(new SlashCommandOptionBuilder()
+              .WithName("what")
+              .WithType(ApplicationCommandOptionType.Integer)
+              .AddChoice("register", 1)
+              .AddChoice("alert", 2)
+              .WithDescription("what to trigger")
+              .WithRequired(true)
+            )
+            .AddOption("aid", ApplicationCommandOptionType.Integer, "appointment id")
+          )
+          .AddOption(new SlashCommandOptionBuilder()
+            .WithName("trigger-reset")
+            .WithType(ApplicationCommandOptionType.SubCommand)
+            .WithDescription("reset a message trigger")
             .AddOption(new SlashCommandOptionBuilder()
               .WithName("what")
               .WithType(ApplicationCommandOptionType.Integer)
@@ -152,20 +166,49 @@ namespace SeerRaidBot {
           switch ((int)options[0].Value)
           {
             case 1: {
-
+              var id = (int)options[1].Value;
+              var appointment = context_dict[((SocketGuildChannel)command.Channel).Guild][command.Channel].First(a => a.ID == id);
+              register(command.Channel, appointment);
+              command.RespondAsync("success", ephemeral: true).Wait();
             } break;
             case 2: {
               var id = (int)options[1].Value;
               var appointment = context_dict[((SocketGuildChannel)command.Channel).Guild][command.Channel].First(a => a.ID == id);
-              if(appointment.last_register_message == null)
+              if(appointment.last_message_register == null)
               {
                 command.RespondAsync("this event had no register message yet.", ephemeral: true).Wait();
               }
               else
               {
+                alert(command.Channel, appointment);
                 command.RespondAsync("success", ephemeral: true).Wait();
-                alert(command.Channel, in appointment);
               }
+            } break;
+            default: {
+              command.RespondAsync($"unknown what 'trigger what: {options[0].Value}'", ephemeral: true).Wait();
+            } break;
+          }
+        } return;
+        case "trigger-reset": {
+          var options = sub_command.Options.ToArray();
+          if(options.Length < 2)
+          {
+            command.RespondAsync("trigger needs two arguments", ephemeral: true).Wait();
+            return;
+          }
+          switch ((int)options[0].Value)
+          {
+            case 1: {
+              var id = (int)options[1].Value;
+              var appointment = context_dict[((SocketGuildChannel)command.Channel).Guild][command.Channel].First(a => a.ID == id);
+              appointment.last_message_register = null;
+              command.RespondAsync("success", ephemeral: true).Wait();
+            } break;
+            case 2: {
+              var id = (int)options[1].Value;
+              var appointment = context_dict[((SocketGuildChannel)command.Channel).Guild][command.Channel].First(a => a.ID == id);
+              appointment.last_message_alert = null;
+              command.RespondAsync("success", ephemeral: true).Wait();
             } break;
             default: {
               command.RespondAsync($"unknown what 'trigger what: {options[0].Value}'", ephemeral: true).Wait();
@@ -192,6 +235,24 @@ namespace SeerRaidBot {
       //  }
       //}
       //return;
+    }
+
+    static void tick()
+    {
+      foreach (var (guild, context) in context_dict)
+      {
+        foreach (var (channel, appointments) in context)
+        {
+          foreach (var appointment in appointments)
+          {
+            if(appointment.last_message_alert == null &&
+               appointment.next_occurence - DateTime.Now < ALERT_DELTA)
+            {
+              alert(channel, appointment);
+            }
+          }
+        }
+      }
     }
 
     public static void add(SocketSlashCommand src_command, AppointmentContext context, string first_occurence, int interval, string custom_text)
@@ -294,12 +355,12 @@ namespace SeerRaidBot {
       builder.AddField("Raid info", $"next occurence: {appointment.next_occurence}");
       
       var message = channel.SendMessageAsync(embed: builder.Build()).Result;
-      appointment.last_register_message = message;
+      appointment.last_message_register = message;
 
       save();
     }
 
-    public static void alert(IMessageChannel channel, in RaidAppointment appointment)
+    public static void alert(IMessageChannel channel, RaidAppointment appointment)
     {
       var builder = new EmbedBuilder() {
         Title        = "Raid remainder",
@@ -308,13 +369,13 @@ namespace SeerRaidBot {
       if(appointment.custom_message != null) builder.WithDescription(appointment.custom_message);
       var profession_list_builder = new StringBuilder(512);
       var unknown_professions_builder = new StringBuilder(512);
-      appointment.last_register_message = channel.GetMessageAsync(appointment.last_register_message.Id).Result; //urgh
-      foreach (var (emote, metadata) in appointment.last_register_message.Reactions)
+      appointment.last_message_register = channel.GetMessageAsync(appointment.last_message_register.Id).Result; //urgh
+      foreach (var (emote, metadata) in appointment.last_message_register.Reactions)
       {
         if(allowed_emotes.Contains(((Emote)emote).Id)) //todo  @speed
         {
           profession_list_builder.Clear();
-          foreach (var user in appointment.last_register_message.GetReactionUsersAsync(emote, metadata.ReactionCount).FlattenAsync().Result)
+          foreach (var user in appointment.last_message_register.GetReactionUsersAsync(emote, metadata.ReactionCount).FlattenAsync().Result)
           {
            if(profession_list_builder.Length > 1)
              profession_list_builder.Append('\n');
@@ -324,7 +385,7 @@ namespace SeerRaidBot {
         }
         else
         {
-          foreach (var user in appointment.last_register_message.GetReactionUsersAsync(emote, metadata.ReactionCount).FlattenAsync().Result)
+          foreach (var user in appointment.last_message_register.GetReactionUsersAsync(emote, metadata.ReactionCount).FlattenAsync().Result)
           {
             if(unknown_professions_builder.Length > 1)
               unknown_professions_builder.Append('\n');
@@ -336,7 +397,7 @@ namespace SeerRaidBot {
       {
         builder.AddField("unknown profession", unknown_professions_builder);
       }
-      channel.SendMessageAsync(embed: builder.Build());
+      appointment.last_message_alert = channel.SendMessageAsync(embed: builder.Build()).Result;
 
       save();
     }
@@ -364,7 +425,8 @@ namespace SeerRaidBot {
             sw.Write(appointment.custom_message ?? string.Empty);
             sw.Write(appointment.ID);
             sw.Write(appointment.next_occurence.ToBinary());
-            sw.Write(appointment.last_register_message?.Id ?? 0);
+            sw.Write(appointment.last_message_register?.Id ?? 0);
+            sw.Write(appointment.last_message_alert?.Id ?? 0);
           }
         }
       }
@@ -401,7 +463,9 @@ namespace SeerRaidBot {
               appointment.ID                    = sr.ReadInt32();
               appointment.next_occurence        = DateTime.FromBinary(sr.ReadInt64());
               var tmp = sr.ReadUInt64();
-              if(tmp > 0) appointment.last_register_message = channel.GetMessageAsync(tmp).Result;
+              if(tmp > 0) appointment.last_message_register = channel.GetMessageAsync(tmp).Result;
+              tmp = sr.ReadUInt64();
+              if(tmp > 0) appointment.last_message_alert = channel.GetMessageAsync(tmp).Result;
               
               appointments.Add(appointment);
             }
@@ -436,6 +500,7 @@ namespace SeerRaidBot {
     public static int next_ID;
     
     public DateTime  next_occurence;
-    public IMessage? last_register_message;
+    public IMessage? last_message_register;
+    public IMessage? last_message_alert;
   }
 }
