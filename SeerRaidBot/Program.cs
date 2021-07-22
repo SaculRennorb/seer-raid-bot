@@ -68,7 +68,15 @@ namespace SeerRaidBot {
 
     public static async Task client_ready()
     {
-      load();
+      if(load())
+      {
+        Console.WriteLine($"loaded {context_dict.Count} guilds data");
+      }
+      else
+      {
+        Console.WriteLine("load failed");
+      }
+      
       foreach (var guild in client.Guilds)
       {
         context_dict.TryAdd(guild, new AppointmentContext());
@@ -250,11 +258,14 @@ namespace SeerRaidBot {
                appointment.next_occurence - DateTime.Now < ALERT_DELTA)
             {
               alert(channel, appointment);
+              appointment.last_message_register = null;
             }
             if(appointment.last_message_register == null &&
-               appointment.next_occurence - DateTime.Now < ALERT_DELTA)
+               DateTime.Now - appointment.next_occurence < REGISTER_DELTA)
             {
-              alert(channel, appointment);
+              appointment.next_occurence += appointment.interval;
+              register(channel, appointment);
+              appointment.last_message_alert = null;
             }
           }
         }
@@ -359,6 +370,7 @@ namespace SeerRaidBot {
         builder.WithDescription("react to this post to register for the raid.");
       }
       builder.AddField("Raid info", $"next occurence: {appointment.next_occurence}");
+      builder.WithFooter($"ID: {appointment.ID}");
       
       var message = channel.SendMessageAsync(embed: builder.Build()).Result;
       appointment.last_message_register = message;
@@ -376,22 +388,22 @@ namespace SeerRaidBot {
       var profession_list_builder = new StringBuilder(512);
       var unknown_professions_builder = new StringBuilder(512);
       appointment.last_message_register = channel.GetMessageAsync(appointment.last_message_register.Id).Result; //urgh
-      foreach (var (emote, metadata) in appointment.last_message_register.Reactions)
+      foreach (var (emoji, metadata) in appointment.last_message_register.Reactions)
       {
-        if(allowed_emotes.Contains(((Emote)emote).Id)) //todo  @speed
+        if(emoji is Emote emote && allowed_emotes.Contains(emote.Id))
         {
           profession_list_builder.Clear();
-          foreach (var user in appointment.last_message_register.GetReactionUsersAsync(emote, metadata.ReactionCount).FlattenAsync().Result)
+          foreach (var user in appointment.last_message_register.GetReactionUsersAsync(emoji, metadata.ReactionCount).FlattenAsync().Result)
           {
            if(profession_list_builder.Length > 1)
              profession_list_builder.Append('\n');
            profession_list_builder.Append(user.Mention);
           }
-          builder.AddField(emote.Name, profession_list_builder);
+          builder.AddField(emoji.Name, profession_list_builder);
         }
         else
         {
-          foreach (var user in appointment.last_message_register.GetReactionUsersAsync(emote, metadata.ReactionCount).FlattenAsync().Result)
+          foreach (var user in appointment.last_message_register.GetReactionUsersAsync(emoji, metadata.ReactionCount).FlattenAsync().Result)
           {
             if(unknown_professions_builder.Length > 1)
               unknown_professions_builder.Append('\n');
@@ -403,6 +415,7 @@ namespace SeerRaidBot {
       {
         builder.AddField("unknown profession", unknown_professions_builder);
       }
+      builder.WithFooter($"ID: {appointment.ID}");
       appointment.last_message_alert = channel.SendMessageAsync(embed: builder.Build()).Result;
 
       save();
