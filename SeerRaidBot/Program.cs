@@ -212,8 +212,9 @@ namespace SeerRaidBot {
             } break;
             default: {
               command.RespondAsync($"unknown what 'trigger what: {options[0].Value}'", ephemeral: true).Wait();
-            } break;
+            } return;
           }
+          save();
         } return;
         default: {
           command.RespondAsync($"unknown sub-command '{sub_command.Name}'", ephemeral: true).Wait();
@@ -246,6 +247,11 @@ namespace SeerRaidBot {
           foreach (var appointment in appointments)
           {
             if(appointment.last_message_alert == null &&
+               appointment.next_occurence - DateTime.Now < ALERT_DELTA)
+            {
+              alert(channel, appointment);
+            }
+            if(appointment.last_message_register == null &&
                appointment.next_occurence - DateTime.Now < ALERT_DELTA)
             {
               alert(channel, appointment);
