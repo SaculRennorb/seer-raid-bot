@@ -15,6 +15,7 @@ using Newtonsoft.Json;
 
 using AppointmentContext = System.Collections.Generic.Dictionary<Discord.IMessageChannel, System.Collections.Generic.List<SeerRaidBot.RaidAppointment>>;
 
+//https://discord.com/api/oauth2/authorize?client_id=866727722835116033&permissions=83968&scope=bot%20applications.commands
 namespace SeerRaidBot {
   class Program {
     static readonly TimeSpan REGISTER_DELTA = TimeSpan.FromHours(2);
@@ -28,7 +29,6 @@ namespace SeerRaidBot {
 
     static Timer tick_timer;
 
-    //https://discord.com/api/oauth2/authorize?client_id=866727722835116033&permissions=2048&scope=bot%20applications.commands
     static void Main(string[] args) {
       context_dict = new Dictionary<IGuild, AppointmentContext>();
       //todo: load next id
@@ -243,6 +243,7 @@ namespace SeerRaidBot {
 
     static void tick(object? state)
     {
+      Console.WriteLine($"[{DateTime.Now.TimeOfDay}]tick");
       foreach (var (guild, context) in context_dict)
       {
         foreach (var (channel, appointments) in context)
@@ -256,7 +257,7 @@ namespace SeerRaidBot {
               appointment.last_message_register = null;
             }
             if(appointment.last_message_register == null &&
-               DateTime.Now - appointment.next_occurence < REGISTER_DELTA)
+               DateTime.Now - (appointment.next_occurence + (appointment.appointment_end - appointment.appointment_start)) > REGISTER_DELTA)
             {
               appointment.next_occurence += appointment.interval;
               register(channel, appointment);
@@ -308,6 +309,7 @@ namespace SeerRaidBot {
         appointment_end   = end_timestamp,
         interval          = TimeSpan.FromDays(interval),
         custom_message    = custom_text,
+        next_occurence    = start_timestamp,
       };
       appointments.Add(appointment);
 
@@ -355,16 +357,15 @@ namespace SeerRaidBot {
       var builder = new EmbedBuilder() {
         Title        = "Raid register",
         ThumbnailUrl = "https://wiki.guildwars2.com/images/5/5e/Commander_tag_%28green%29.png",
+        Description  = "React to this post with the role you want to play to register for the raid.",
       };
-      if(appointment.custom_message != null)
       {
-        builder.WithDescription(appointment.custom_message);
+        var info_text = string.Empty;
+        if(appointment.custom_message != null) info_text = $"info: {appointment.custom_message}\n";
+        info_text += $"next occurence: {appointment.next_occurence}";
+        builder.AddField("Raid info", info_text);
       }
-      else
-      {
-        builder.WithDescription("react to this post to register for the raid.");
-      }
-      builder.AddField("Raid info", $"next occurence: {appointment.next_occurence}");
+      
       builder.WithFooter($"ID: {appointment.ID}");
       
       var message = channel.SendMessageAsync(embed: builder.Build()).Result;
@@ -379,7 +380,14 @@ namespace SeerRaidBot {
         Title        = "Raid remainder",
         ThumbnailUrl = "https://wiki.guildwars2.com/images/5/5e/Commander_tag_%28green%29.png",
       };
-      if(appointment.custom_message != null) builder.WithDescription(appointment.custom_message);
+      
+      {
+        var info_text = string.Empty;
+        if(appointment.custom_message != null) info_text = $"{appointment.custom_message}\n";
+        info_text += $"next occurence: {appointment.next_occurence}";
+        builder.AddField("Raid info", info_text);
+      }
+
       var profession_list_builder = new StringBuilder(512);
       var unknown_professions_builder = new StringBuilder(512);
       appointment.last_message_register = channel.GetMessageAsync(appointment.last_message_register.Id).Result; //urgh
