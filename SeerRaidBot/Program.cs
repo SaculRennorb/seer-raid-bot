@@ -392,14 +392,14 @@ namespace SeerRaidBot {
       {
         if(emoji is Emote emote && allowed_emotes.Contains(emote.Id))
         {
-          profession_list_builder.Clear();
-          foreach (var user in appointment.last_message_register.GetReactionUsersAsync(emoji, metadata.ReactionCount).FlattenAsync().Result)
-          {
-           if(profession_list_builder.Length > 1)
-             profession_list_builder.Append('\n');
-           profession_list_builder.Append(user.Mention);
-          }
-          builder.AddField(emoji.Name, profession_list_builder);
+            profession_list_builder.Clear();
+            foreach (var user in appointment.last_message_register.GetReactionUsersAsync(emoji, metadata.ReactionCount).FlattenAsync().Result)
+            {
+              if(profession_list_builder.Length > 1)
+                profession_list_builder.Append('\n');
+              profession_list_builder.Append(user.Mention);
+            }
+            builder.AddField(emote.ToString(), profession_list_builder);
         }
         else
         {
@@ -407,7 +407,7 @@ namespace SeerRaidBot {
           {
             if(unknown_professions_builder.Length > 1)
               unknown_professions_builder.Append('\n');
-            unknown_professions_builder.Append(user.Mention);
+            unknown_professions_builder.Append(emoji).Append(' ').Append(user.Mention);
           }
         }
       }
