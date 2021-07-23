@@ -86,8 +86,6 @@ namespace SeerRaidBot {
         context_dict.TryAdd(guild, new AppointmentContext());
       }
 
-      var test_id = 314748402682429442uL; //todo @nockeckin
-
       var builders = new [] {
         new SlashCommandBuilder()
           .WithName("raid")
@@ -99,6 +97,12 @@ namespace SeerRaidBot {
             .AddOption("initial-occurence", ApplicationCommandOptionType.String, "the first occurance of the raid event (format: ddTT:TT-TT:TT)")
             .AddOption("interval", ApplicationCommandOptionType.Integer, "amount of days after which the event repeats")
             .AddOption("text", ApplicationCommandOptionType.String, "custom text to add the the alert", required: false)
+          )
+          .AddOption(new SlashCommandOptionBuilder()
+            .WithName("remove")
+            .WithType(ApplicationCommandOptionType.SubCommand)
+            .WithDescription("remove a raid event")
+            .AddOption("aid", ApplicationCommandOptionType.Integer, "appointment id")
           )
           .AddOption(new SlashCommandOptionBuilder()
             .WithName("trigger")
@@ -133,8 +137,7 @@ namespace SeerRaidBot {
       {
         try
         {
-          //client.Rest.CreateGlobalCommand(builder.Build()).Wait();
-          var result = client.Rest.CreateGuildCommand(builder.Build(), test_id).Result;
+          client.Rest.CreateGlobalCommand(builder.Build()).Wait();
         }
         catch(ApplicationCommandException ex)
         {
@@ -174,6 +177,14 @@ namespace SeerRaidBot {
           var options = sub_command.Options.ToArray();
           add(command, context_dict[((SocketGuildChannel)command.Channel).Guild],
             (string)options[0].Value, (int)options[1].Value, options.Length > 2 ? (string)options[2].Value : null);
+        } return;
+        case "remove": {
+          if(sub_command.Options.Count < 1)
+          {
+            command.RespondAsync("add requires the aid of the event", ephemeral: true).Wait();
+            return;
+          }
+          remove(command, context_dict[((SocketGuildChannel)command.Channel).Guild], (int)sub_command.Options.First());
         } return;
         case "trigger": {
           var options = sub_command.Options.ToArray();
@@ -322,6 +333,15 @@ namespace SeerRaidBot {
       //save(); //NOTE(Rennorb): already done in register
     }
 
+    public static void remove(SocketSlashCommand src_command, AppointmentContext context, int id)
+    {
+      var channel_context = context[src_command.Channel];
+      channel_context.Remove(channel_context.First(a => a.ID == id));
+      src_command.RespondAsync("success").Wait();
+
+      save();
+    }
+
     static ulong[] allowed_emotes = {
       757142853049909339, //:Necromancer:
       757142853682987068, //:Reaper:
@@ -370,7 +390,7 @@ namespace SeerRaidBot {
       
       var message = channel.SendMessageAsync(embed: builder.Build()).Result;
       appointment.last_message_register = message;
-
+      
       save();
     }
 
@@ -388,7 +408,8 @@ namespace SeerRaidBot {
         builder.AddField("Raid info", info_text);
       }
 
-      var profession_list_builder = new StringBuilder(512);
+      var mentions = new HashSet<IUser>(10);
+      var     profession_list_builder = new StringBuilder(512);
       var unknown_professions_builder = new StringBuilder(512);
       appointment.last_message_register = channel.GetMessageAsync(appointment.last_message_register.Id).Result; //urgh
       foreach (var (emoji, metadata) in appointment.last_message_register.Reactions)
@@ -401,6 +422,7 @@ namespace SeerRaidBot {
               if(profession_list_builder.Length > 1)
                 profession_list_builder.Append('\n');
               profession_list_builder.Append(user.Mention);
+              mentions.Add(user);
             }
             builder.AddField(emote.ToString(), profession_list_builder, inline: true);
         }
@@ -411,6 +433,7 @@ namespace SeerRaidBot {
             if(unknown_professions_builder.Length > 1)
               unknown_professions_builder.Append('\n');
             unknown_professions_builder.Append(emoji).Append(' ').Append(user.Mention);
+            mentions.Add(user);
           }
         }
       }
@@ -419,7 +442,12 @@ namespace SeerRaidBot {
         builder.AddField("unknown profession", unknown_professions_builder);
       }
       builder.WithFooter($"ID: {appointment.ID}");
-      appointment.last_message_alert = channel.SendMessageAsync(embed: builder.Build()).Result;
+
+      var mentions_builder = new StringBuilder(512);
+      foreach (var user in mentions) mentions_builder.Append(user.Mention);
+
+      var message = channel.SendMessageAsync(mentions_builder.ToString(), embed: builder.Build()).Result;
+      appointment.last_message_alert = message;
 
       save();
     }
