@@ -397,14 +397,14 @@ namespace SeerRaidBot {
     public static void alert(IMessageChannel channel, RaidAppointment appointment)
     {
       var builder = new EmbedBuilder() {
-        Title        = "Raid remainder",
+        Title        = "Raid reminder",
         ThumbnailUrl = "https://wiki.guildwars2.com/images/5/5e/Commander_tag_%28green%29.png",
       };
       
       {
         var info_text = string.Empty;
         if(appointment.custom_message != null) info_text = $"{appointment.custom_message}\n";
-        info_text += $"next occurence: {appointment.next_occurence}";
+        info_text += $"next occurence: {appointment.next_occurence:ddd} {appointment.next_occurence}";
         builder.AddField("Raid info", info_text);
       }
 
